@@ -43,9 +43,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CommandPacket.cs" />
+    <Compile Include="Connection.cs" />
     <Compile Include="Log.cs" />
+    <Compile Include="NetworkBufferReader.cs" />
+    <Compile Include="NetworkBufferWriter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="QueryCommand.cs" />
+    <Compile Include="Status.cs" />
+    <Compile Include="Util.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
