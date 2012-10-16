@@ -14,7 +14,9 @@ namespace fxmy.net
         STRING,
         OPERATOR,
         NUMBER,
-        SEMICOLON
+        SEMICOLON,
+        STRING_DELIMITER,
+        COMMA
     }
 
     enum Symbol
@@ -32,6 +34,7 @@ namespace fxmy.net
         SHOW,
         TABLE,
         TABLES,
+        TOP,
         WHERE,
     }
 
@@ -58,10 +61,10 @@ namespace fxmy.net
                 case "show": return Symbol.SHOW;
                 case "table": return Symbol.TABLE;
                 case "tables": return Symbol.TABLES;
+                case "top": return Symbol.TOP;
                 case "where": return Symbol.WHERE;
             }
 
-            Debugger.Break();
             return Symbol.IDENTIFIER;
         }
 
@@ -108,6 +111,17 @@ namespace fxmy.net
             return Char.IsLetterOrDigit(c) || c == '@' || c == '#' || c == '$' || c == '_';
         }
 
+        public int IndexOfSymbol(Symbol symbol)
+        {
+            for (int i = 0; i < mTokens.Count; ++i)
+            {
+                if (mTokens[i].mTokenType == TokenType.SYMBOL && mTokens[i].mSymbol == symbol)
+                    return i;
+            }
+
+            return -1;
+        }
+
         public bool IsSymbolAt(int index, Symbol symbol)
         {
             if (mTokens.Count <= index)
@@ -121,76 +135,101 @@ namespace fxmy.net
 
         public bool HasSymbol(Symbol symbol)
         {
-            for (int i = 0; i < mTokens.Count; ++i)
-            {
-                if (mTokens[i].mTokenType == TokenType.SYMBOL && mTokens[i].mSymbol == symbol)
-                    return true;
-            }
+            return IndexOfSymbol(symbol) >= 0;
+        }
+
+        delegate bool EndOfTokenDelegate(char c, char previousChar, char stringDelimiter);
+
+        static bool EndOfString(char c, char previousChar, char stringDelimiter)
+        {
+            return c == stringDelimiter && previousChar != '\\';
+        }
+
+        static bool EndOfSymbol(char c, char previousChar, char stringDelimiter)
+        {
+            return !IsSubsequentIdentifierChar(c);
+        }
+
+        static bool EndOfOperator(char c, char previousChar, char stringDelimiter)
+        {
+            return !IsOperatorChar(c);
+        }
+
+        static bool EndOfNumber(char c, char previousChar, char stringDelimiter)
+        {
+            return !Char.IsNumber(c);
+        }
+
+        static bool EndOfSingleCharToken(char c, char previousChar, char stringDelimiter)
+        {
+            return true;
+        }
+
+        static bool EndOfInvalid(char c, char previousChar, char stringDelimiter)
+        {
             return false;
         }
+
+        static EndOfTokenDelegate[] mEndOfTokenFunctions = new EndOfTokenDelegate[] { 
+            EndOfInvalid,
+            EndOfSymbol,
+            EndOfString,
+            EndOfOperator,
+            EndOfNumber,
+            EndOfSingleCharToken, 
+            EndOfSingleCharToken,
+            EndOfSingleCharToken
+        };
 
         public Query(string query)
         {
             char[] queryChars = query.ToCharArray();
             StringBuilder tokenBuilder = new StringBuilder();
-            bool inString = false;
-            bool inIdentifier = false;
-            bool inOperator = false;
+
             char stringDelimiter = new char();
             char c = new char();
             char previousChar = new char();
+
+            TokenType tokenType = TokenType.INVALID;
 
             for (int i = 0; i < queryChars.Length; ++i)
             {
                 previousChar = c;
                 c = queryChars[i];
 
-                if (inString)
+                if (mEndOfTokenFunctions[(int)tokenType](c, previousChar, stringDelimiter))
                 {
-                    if (c == stringDelimiter && previousChar != '\\')
-                    {
-                        inString = false;
+                    mTokens.Add(new Token(tokenBuilder.ToString(), tokenType));
 
-                        tokenBuilder.Append(c);
-                        mTokens.Add(new Token(tokenBuilder.ToString(), TokenType.STRING));
-                        tokenBuilder = new StringBuilder();
-                        continue;
-                    }
-                }
-                else if (inIdentifier)
-                {
-                    if (!IsSubsequentIdentifierChar(c))
+                    if (tokenType == TokenType.STRING_DELIMITER)
                     {
-                        inIdentifier = false;
+                        int tokenCount = mTokens.Count;
+                        if (tokenCount > 1 && mTokens[tokenCount - 2].mTokenType != TokenType.STRING)
+                        {
+                            tokenType = TokenType.STRING;
+                        }
+                        else
+                        {
+                            tokenType = TokenType.INVALID;
+                        }
+                    }
+                    else
+                    {
+                        tokenType = TokenType.INVALID;
+                    }
 
-                        mTokens.Add(new Token(tokenBuilder.ToString(), TokenType.SYMBOL));
-                        tokenBuilder = new StringBuilder();
-                    }
-                }
-                else if (inOperator)
-                {
-                    if (!IsOperatorChar(c))
-                    {
-                        inOperator = false;
-                        mTokens.Add(new Token(tokenBuilder.ToString(), TokenType.OPERATOR));
-                        tokenBuilder = new StringBuilder();
-                    }
+                    tokenBuilder = new StringBuilder();
                 }
 
-                if (!inString && !inIdentifier && !inOperator)
+                if (tokenType == TokenType.INVALID)
                 {
-                    if (c == '\'' || c == '"')
+                    if (IsInitialIdentifierChar(c))
                     {
-                        inString = true;
-                        stringDelimiter = c;
-                    }
-                    else if (IsInitialIdentifierChar(c))
-                    {
-                        inIdentifier = true;
+                        tokenType = TokenType.SYMBOL;
                     }
                     else if (IsOperatorChar(c))
                     {
-                        inOperator = true;
+                        tokenType = TokenType.OPERATOR;
                     }
                     else if (Char.IsWhiteSpace(c))
                     {
@@ -198,7 +237,20 @@ namespace fxmy.net
                     }
                     else if (c == ';')
                     {
-                        mTokens.Add(new Token(";", TokenType.SEMICOLON));
+                        tokenType = TokenType.SEMICOLON;
+                    }
+                    else if (Char.IsNumber(c))
+                    {
+                        tokenType = TokenType.NUMBER;
+                    }
+                    else if (c == '\'' || c == '"')
+                    {
+                        tokenType = TokenType.STRING_DELIMITER;
+                        stringDelimiter = c;
+                    }
+                    else if (c == ',')
+                    {
+                        tokenType = TokenType.COMMA;
                     }
                     else
                     {
@@ -206,8 +258,34 @@ namespace fxmy.net
                     }
                 }
 
-                tokenBuilder.Append(c);                
+                tokenBuilder.Append(c);
             }
+
+            if (tokenBuilder.Length > 0 && tokenType != TokenType.INVALID)
+                mTokens.Add(new Token(tokenBuilder.ToString(), tokenType));
+        }
+
+        public override string ToString()
+        {
+            StringBuilder stringBuilder = new StringBuilder();
+
+            for (int i = 0; i < mTokens.Count - 1; ++i)
+            {
+                stringBuilder.Append(mTokens[i].mTokenText);
+
+                // Add a space between all tokens unless we're adding the quotes around a string.
+                // In that case, check to see if the current token is a string delimiter and the
+                // next is a string, or the current is a string and the one after is a delimter,
+                // ie: *'foo* or *foo'*, and skip adding the delimiter.
+                if (!((mTokens[i].mTokenType == TokenType.STRING_DELIMITER && mTokens[i + 1].mTokenType == TokenType.STRING)
+                    || (mTokens[i].mTokenType == TokenType.STRING && mTokens[i + 1].mTokenType == TokenType.STRING_DELIMITER)))
+                {
+                    stringBuilder.Append(' ');
+                }
+            }
+
+            stringBuilder.Append(mTokens[mTokens.Count - 1].mTokenText);
+            return stringBuilder.ToString();
         }
     }
     
@@ -222,39 +300,84 @@ namespace fxmy.net
             mQuery = new Query(mQueryString);
         }
 
-        void Describe()
+        void Describe(Connection connection)
         {
+            string describeCommand = string.Format("sp_columns {0}", mQuery.mTokens[1].mTokenText);
+            OdbcCommand command = new OdbcCommand(describeCommand, connection.DatabaseConnection);
+
+            try
+            {
+                OdbcDataReader reader = command.ExecuteReader();
+
+                if (!reader.HasRows)
+                {
+                    connection.Status = Status.GetStatus(Status.ERROR_UNKNOWN_OBJECT);
+                    return;
+                }
+
+                // Currently there is no implementation for Describe if the table
+                // actually exists. TODO: implement!
+                Debugger.Break();
+            }
+            catch (OdbcException e)
+            {
+                Log.LogErrors(e);
+                connection.Status = Status.GetStatus(e.Errors[0]);
+            }
+        }
+
+        void ShowTables(Connection connection)
+        {
+            // No implementation for SHOW TABLES yet. TODO: implement!
             Debugger.Break();
         }
 
         public override ConnectionState Execute(Connection connection)
         {
+            string queryString = mQueryString;
+
             if (mQuery.IsSymbolAt(0, Symbol.SET) && mQuery.IsSymbolAt(1, Symbol.NAMES))
             {
-                Token namesToken = mQuery.mTokens[2];
-                Util.Verify(namesToken.mTokenType == TokenType.STRING && namesToken.mTokenText == "'utf8'");
+                Token namesToken = mQuery.mTokens[3];
+                Util.Verify(namesToken.mTokenType == TokenType.STRING && namesToken.mTokenText == "utf8");
                 connection.Status = Status.GetStatus(Status.OK);
             }
             else if (mQuery.IsSymbolAt(0, Symbol.DESCRIBE))
             {
-                Describe();
+                Describe(connection);
             }
             else if (mQuery.IsSymbolAt(0, Symbol.SHOW) && mQuery.IsSymbolAt(1, Symbol.TABLES))
             {
-                Debugger.Break();
+                ShowTables(connection);
             }
             else
             {
+                // MySQL limits rows with a "LIMIT x" clause at the end of the query,
+                // but MSSQL expects a "SELECT TOP x" instead. This bit of code
+                // rearranges the query so that MSSQL doesn't barf.
                 if (mQuery.HasSymbol(Symbol.LIMIT))
                 {
-                    Debugger.Break();
+                    int limitIndex = mQuery.IndexOfSymbol(Symbol.LIMIT);
+                    Token numberToken = mQuery.mTokens[limitIndex + 1];
+                    Util.Verify(numberToken.mTokenType == TokenType.NUMBER);
+
+                    // Remove the LIMIT token
+                    mQuery.mTokens.RemoveAt(limitIndex);
+                    // Remove the number token
+                    mQuery.mTokens.RemoveAt(limitIndex);
+                    
+                    // Add the "TOP x" after the SELECT token.
+                    int selectIndex = mQuery.IndexOfSymbol(Symbol.SELECT);
+                    mQuery.mTokens.Insert(selectIndex + 1, new Token("TOP", TokenType.SYMBOL));
+                    mQuery.mTokens.Insert(selectIndex + 2, numberToken);
+                    queryString = mQuery.ToString();
                 }
                 if (mQuery.IsSymbolAt(0, Symbol.CREATE) && mQuery.IsSymbolAt(1, Symbol.TABLE))
                 {
                     Debugger.Break();
                 }
 
-                OdbcCommand command = new System.Data.Odbc.OdbcCommand(mQueryString, connection.DatabaseConnection);
+                OdbcCommand command = new OdbcCommand(queryString, connection.DatabaseConnection);
 
                 if (mQuery.IsSymbolAt(0, Symbol.SELECT))
                 {
