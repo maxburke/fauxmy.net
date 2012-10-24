@@ -79,7 +79,7 @@ namespace fxmy.net
 
         public override ConnectionState Execute(Connection connection)
         {
-            throw new NotImplementedException();
+            return ConnectionState.EXIT;
         }
     }
 
