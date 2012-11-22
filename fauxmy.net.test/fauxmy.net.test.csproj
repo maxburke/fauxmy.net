@@ -47,6 +47,12 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TokenizerTest.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\fauxmy.net\fauxmy.net.csproj">
+      <Project>{AB35E23C-9D00-4DCF-8C02-17FF6DE06B1E}</Project>
+      <Name>fauxmy.net</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

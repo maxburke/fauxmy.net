@@ -2,16 +2,28 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using fauxmy.net;
+using System.IO;
+using fxmy.net;
 
-namespace fauxmy.net.test
+namespace fxmy.net.test
 {
     class TokenizerTest
     {
         [TestAttribute("TokenizerTest")]
         static bool RunTest()
         {
-            return true;
+            using (TextReader reader = new StreamReader(fxmy.net.Log.QUERY_LOG_FILE))
+            {
+                string line = null;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    Query query = new Query(line);
+
+                    System.Diagnostics.Debugger.Break();
+                }
+
+                return true;
+            }
         }
     }
 }

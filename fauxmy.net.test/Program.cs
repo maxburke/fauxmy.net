@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Reflection;
 
-namespace fauxmy.net.test
+namespace fxmy.net.test
 {
     class TestAttribute : Attribute
     {
@@ -22,7 +22,7 @@ namespace fauxmy.net.test
     {
         static void Main(string[] args)
         {
-            Type mainType = typeof(fauxmy.net.test.Program);
+            Type mainType = typeof(fxmy.net.test.Program);
             Assembly assembly = mainType.Assembly;
 
             Type[] assemblyTypes = assembly.GetTypes();
