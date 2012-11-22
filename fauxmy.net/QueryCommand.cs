@@ -7,7 +7,7 @@ using System.Data.Odbc;
 
 namespace fxmy.net
 {
-    enum TokenType
+    public enum TokenType
     {
         INVALID,
         SYMBOL,
@@ -19,7 +19,7 @@ namespace fxmy.net
         COMMA
     }
 
-    enum Symbol
+    public enum Symbol
     {
         INVALID,
         IDENTIFIER,
@@ -38,7 +38,7 @@ namespace fxmy.net
         WHERE,
     }
 
-    class Token
+    public class Token
     {
         public string mTokenText;
         public TokenType mTokenType;
@@ -92,7 +92,7 @@ namespace fxmy.net
         }
     }
 
-    class Query
+    public class Query
     {
         public List<Token> mTokens = new List<Token>();
 
