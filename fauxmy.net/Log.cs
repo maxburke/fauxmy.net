@@ -4,7 +4,7 @@ using System.Data.Odbc;
 
 namespace fxmy.net
 {
-    class Log
+    public class Log
     {
         static Verbosity gVerbosity;
         static TextWriter gLogStream = Console.Error;
@@ -40,6 +40,27 @@ namespace fxmy.net
         {
             string logString = string.Format(format, args);
             gLogStream.WriteLine("[fxmy] {0}", logString);
+        }
+
+        public const string QUERY_LOG_FILE = @"C:\shared\temp\query.log";
+
+        public static void LogQuery(string query)
+        {
+            using (TextWriter queryWriter = new StreamWriter(QUERY_LOG_FILE, true))
+            {
+                queryWriter.WriteLine(query.Replace(System.Environment.NewLine, " ").Replace('\n', ' ').Replace('\r', ' '));
+            }
+        }
+
+        static Log()
+        {
+            try
+            {
+                System.IO.File.Delete(QUERY_LOG_FILE);
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 }
