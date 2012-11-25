@@ -213,15 +213,12 @@ namespace fxmy.net
             char delimiter = query[i];
             StringBuilder builder = new StringBuilder();
 
-            builder.Append(delimiter);
             ++i;
 
             for (; i < query.Length; ++i)
             {
                 char c = query[i];
                 bool isEscaped = (i >= 1) && query[i - 1] == '\\';
-
-                builder.Append(c);
 
                 if (c == delimiter && !isEscaped)
                 {
@@ -230,6 +227,8 @@ namespace fxmy.net
                     // calls this one will do it for us.
                     break;
                 }
+
+                builder.Append(c);
             }
 
             return new Token(builder.ToString(), TokenType.STRING);
@@ -265,7 +264,9 @@ namespace fxmy.net
                 }
                 else if (c == '\'' || c == '"')
                 {
+                    mTokens.Add(new Token(new String(c, 1), TokenType.STRING_DELIMITER));
                     mTokens.Add(ParseString(query, ref i));
+                    mTokens.Add(new Token(new String(c, 1), TokenType.STRING_DELIMITER));
                 }
                 else if (c == ',')
                 {
