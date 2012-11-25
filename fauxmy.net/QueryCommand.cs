@@ -38,6 +38,7 @@ namespace fxmy.net
         TABLES,
         TOP,
         WHERE,
+        LIKE,
     }
 
     public class Token
@@ -65,6 +66,7 @@ namespace fxmy.net
                 case "tables": return Symbol.TABLES;
                 case "top": return Symbol.TOP;
                 case "where": return Symbol.WHERE;
+                case "like": return Symbol.LIKE;
             }
 
             return Symbol.IDENTIFIER;
@@ -353,7 +355,48 @@ namespace fxmy.net
 
         void ShowTables(Connection connection)
         {
-            // No implementation for SHOW TABLES yet. TODO: implement!
+            string tablesCommand = "sp_tables @table_owner='dbo'";
+            int likeIndex = mQuery.IndexOfSymbol(Symbol.LIKE);
+
+            if (likeIndex >= 0)
+            {
+                Debug.Assert(mQuery.mTokens.Count >= likeIndex + 2);
+
+                Token delimiterToken = mQuery.mTokens[likeIndex + 1];
+                Token likeToken = mQuery.mTokens[likeIndex + 2];
+
+                Debug.Assert(delimiterToken.mTokenType == TokenType.STRING_DELIMITER);
+
+                tablesCommand += string.Format(", @table_name={0}{1}{0}",
+                    delimiterToken.mTokenText,
+                    likeToken.mTokenText);
+            }
+
+            OdbcCommand command = new OdbcCommand(tablesCommand, connection.DatabaseConnection);
+
+            try
+            {
+                OdbcDataReader reader = command.ExecuteReader();
+
+                if (!reader.HasRows)
+                {
+                    connection.Status = Status.GetStatus(Status.OK);
+                    return;
+                }
+
+                // Currently there is no implementation for SHOW TABLES if the table
+                // actually exists. TODO: implement!
+                Debugger.Break();
+            }
+            catch (OdbcException e)
+            {
+                Log.LogErrors(e);
+                connection.Status = Status.GetStatus(e.Errors[0]);
+            }
+        }
+
+        void CreateTable(Connection connection)
+        {
             Debugger.Break();
         }
 
@@ -374,6 +417,10 @@ namespace fxmy.net
             else if (mQuery.IsSymbolAt(0, Symbol.SHOW) && mQuery.IsSymbolAt(1, Symbol.TABLES))
             {
                 ShowTables(connection);
+            }
+            else if (mQuery.IsSymbolAt(0, Symbol.CREATE) && mQuery.IsSymbolAt(1, Symbol.TABLE))
+            {
+                CreateTable(connection);
             }
             else
             {
@@ -396,10 +443,6 @@ namespace fxmy.net
                     mQuery.mTokens.Insert(selectIndex + 1, new Token("TOP", TokenType.SYMBOL));
                     mQuery.mTokens.Insert(selectIndex + 2, numberToken);
                     queryString = mQuery.ToString();
-                }
-                if (mQuery.IsSymbolAt(0, Symbol.CREATE) && mQuery.IsSymbolAt(1, Symbol.TABLE))
-                {
-                    Debugger.Break();
                 }
 
                 OdbcCommand command = new OdbcCommand(queryString, connection.DatabaseConnection);
