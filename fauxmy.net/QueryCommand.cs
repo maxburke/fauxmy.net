@@ -16,6 +16,8 @@ namespace fxmy.net
         NUMBER,
         SEMICOLON,
         STRING_DELIMITER,
+        LPAREN,
+        RPAREN,
         COMMA
     }
 
@@ -111,6 +113,11 @@ namespace fxmy.net
             return Char.IsLetterOrDigit(c) || c == '@' || c == '#' || c == '$' || c == '_';
         }
 
+        static bool IsNumericCharacter(char c)
+        {
+            return Char.IsDigit(c) || c == '.' || c == 'x' || c == 'X' || c == 'e' || c == 'E';
+        }
+
         public int IndexOfSymbol(Symbol symbol)
         {
             for (int i = 0; i < mTokens.Count; ++i)
@@ -138,131 +145,145 @@ namespace fxmy.net
             return IndexOfSymbol(symbol) >= 0;
         }
 
-        delegate bool EndOfTokenDelegate(char c, char previousChar, char stringDelimiter);
-
-        static bool EndOfString(char c, char previousChar, char stringDelimiter)
+        static Token ParseSymbol(string query, ref int i)
         {
-            return c == stringDelimiter && previousChar != '\\';
+            StringBuilder builder = new StringBuilder();
+
+            for (; i < query.Length; ++i)
+            {
+                char c = query[i];
+
+                if (!IsSubsequentIdentifierChar(c))
+                {
+                    // Move the pointer back one as the top level loop in the
+                    // function that calls this will advance it to the correct
+                    // position.
+                    --i;
+                    break;
+                }
+
+                builder.Append(c);
+            }
+
+            return new Token(builder.ToString(), TokenType.SYMBOL);
         }
 
-        static bool EndOfSymbol(char c, char previousChar, char stringDelimiter)
+        static Token ParseOperator(string query, ref int i)
         {
-            return !IsSubsequentIdentifierChar(c);
+            StringBuilder builder = new StringBuilder();
+
+            for (; i < query.Length; ++i)
+            {
+                char c = query[i];
+
+                if (!IsOperatorChar(c))
+                {
+                    --i;
+                    break;
+                }
+
+                builder.Append(c);
+            }
+
+            return new Token(builder.ToString(), TokenType.OPERATOR);
         }
 
-        static bool EndOfOperator(char c, char previousChar, char stringDelimiter)
+        static Token ParseNumber(string query, ref int i)
         {
-            return !IsOperatorChar(c);
+            StringBuilder builder = new StringBuilder();
+
+            for (; i < query.Length; ++i)
+            {
+                char c = query[i];
+
+                if (!IsNumericCharacter(c))
+                {
+                    --i;
+                    break;
+                }
+
+                builder.Append(c);
+            }
+
+            return new Token(builder.ToString(), TokenType.NUMBER);
         }
 
-        static bool EndOfNumber(char c, char previousChar, char stringDelimiter)
+        static Token ParseString(string query, ref int i)
         {
-            return !Char.IsNumber(c);
-        }
+            char delimiter = query[i];
+            StringBuilder builder = new StringBuilder();
 
-        static bool EndOfSingleCharToken(char c, char previousChar, char stringDelimiter)
-        {
-            return true;
-        }
+            builder.Append(delimiter);
+            ++i;
 
-        static bool EndOfInvalid(char c, char previousChar, char stringDelimiter)
-        {
-            return false;
-        }
+            for (; i < query.Length; ++i)
+            {
+                char c = query[i];
+                bool isEscaped = (i >= 1) && query[i - 1] == '\\';
 
-        static EndOfTokenDelegate[] mEndOfTokenFunctions = new EndOfTokenDelegate[] { 
-            EndOfInvalid,
-            EndOfSymbol,
-            EndOfString,
-            EndOfOperator,
-            EndOfNumber,
-            EndOfSingleCharToken, 
-            EndOfSingleCharToken,
-            EndOfSingleCharToken
-        };
+                builder.Append(c);
+
+                if (c == delimiter && !isEscaped)
+                {
+                    // Technically we need to move the pointer i ahead one 
+                    // character but the top level loop in the function that
+                    // calls this one will do it for us.
+                    break;
+                }
+            }
+
+            return new Token(builder.ToString(), TokenType.STRING);
+        }
 
         public Query(string query)
         {
-            char[] queryChars = query.ToCharArray();
-            StringBuilder tokenBuilder = new StringBuilder();
+            TokenType tokenType = new TokenType();
 
-            char stringDelimiter = new char();
-            char c = new char();
-            char previousChar = new char();
-
-            TokenType tokenType = TokenType.INVALID;
-
-            for (int i = 0; i < queryChars.Length; ++i)
+            for (int i = 0; i < query.Length; ++i)
             {
-                previousChar = c;
-                c = queryChars[i];
+                char c = query[i];
 
-                if (mEndOfTokenFunctions[(int)tokenType](c, previousChar, stringDelimiter))
+                if (IsInitialIdentifierChar(c))
                 {
-                    mTokens.Add(new Token(tokenBuilder.ToString(), tokenType));
-
-                    if (tokenType == TokenType.STRING_DELIMITER)
-                    {
-                        int tokenCount = mTokens.Count;
-                        if (tokenCount > 1 && mTokens[tokenCount - 2].mTokenType != TokenType.STRING)
-                        {
-                            tokenType = TokenType.STRING;
-                        }
-                        else
-                        {
-                            tokenType = TokenType.INVALID;
-                        }
-                    }
-                    else
-                    {
-                        tokenType = TokenType.INVALID;
-                    }
-
-                    tokenBuilder = new StringBuilder();
+                    mTokens.Add(ParseSymbol(query, ref i));
                 }
-
-                if (tokenType == TokenType.INVALID)
+                else if (IsOperatorChar(c))
                 {
-                    if (IsInitialIdentifierChar(c))
-                    {
-                        tokenType = TokenType.SYMBOL;
-                    }
-                    else if (IsOperatorChar(c))
-                    {
-                        tokenType = TokenType.OPERATOR;
-                    }
-                    else if (Char.IsWhiteSpace(c))
-                    {
-                        continue;
-                    }
-                    else if (c == ';')
-                    {
-                        tokenType = TokenType.SEMICOLON;
-                    }
-                    else if (Char.IsNumber(c))
-                    {
-                        tokenType = TokenType.NUMBER;
-                    }
-                    else if (c == '\'' || c == '"')
-                    {
-                        tokenType = TokenType.STRING_DELIMITER;
-                        stringDelimiter = c;
-                    }
-                    else if (c == ',')
-                    {
-                        tokenType = TokenType.COMMA;
-                    }
-                    else
-                    {
-                        Debugger.Break();
-                    }
+                    mTokens.Add(ParseOperator(query, ref i));
                 }
-
-                tokenBuilder.Append(c);
+                else if (Char.IsWhiteSpace(c))
+                {
+                    continue;
+                }
+                else if (c == ';')
+                {
+                    mTokens.Add(new Token(";", TokenType.SEMICOLON));
+                }
+                else if (Char.IsNumber(c))
+                {
+                    mTokens.Add(ParseNumber(query, ref i));
+                }
+                else if (c == '\'' || c == '"')
+                {
+                    mTokens.Add(ParseString(query, ref i));
+                }
+                else if (c == ',')
+                {
+                    mTokens.Add(new Token(",", TokenType.COMMA));
+                }
+                else if (c == '(')
+                {
+                    mTokens.Add(new Token("(", TokenType.LPAREN));
+                }
+                else if (c == ')')
+                {
+                    mTokens.Add(new Token(")", TokenType.RPAREN));
+                }
+                else
+                {
+                    Debugger.Break();
+                }
             }
-
-            if (tokenBuilder.Length > 0 && tokenType != TokenType.INVALID)
-                mTokens.Add(new Token(tokenBuilder.ToString(), tokenType));
         }
 
         public override string ToString()
@@ -297,6 +318,9 @@ namespace fxmy.net
         public QueryCommand(NetworkBufferReader reader)
         {
             mQueryString = reader.ReadString().Trim();
+
+            Log.LogQuery(mQueryString);
+
             mQuery = new Query(mQueryString);
         }
 
@@ -391,7 +415,7 @@ namespace fxmy.net
                         connection.Status = Status.GetStatus(e.Errors[0]);
                     }
 
-                    Debugger.Break();
+                    //Debugger.Break();
                 }
                 else
                 {
