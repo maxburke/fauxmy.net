@@ -76,7 +76,7 @@ namespace fxmy.net
 
         static void Main(string[] args)
         {
-            const string CONNECTION_STRING = @"Driver={SQL Server Native Client 11.0};Server=.\SQLEXPRESS;UID=max;PWD=W0zixege";
+            const string CONNECTION_STRING = @"Driver={SQL Server Native Client 10.0};Server=.\SQLEXPRESS;UID=max;PWD=W0zixege";
             Log.SetVerbosity(Log.Verbosity.ALL);
             Socket socket = OpenSocket(FXMY_DEFAULT_PORT);
 
