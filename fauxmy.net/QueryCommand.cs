@@ -39,6 +39,7 @@ namespace fxmy.net
         TOP,
         WHERE,
         LIKE,
+        KEY,
     }
 
     public class Token
@@ -394,11 +395,182 @@ namespace fxmy.net
                 connection.Status = Status.GetStatus(e.Errors[0]);
             }
         }
+#if WHATDAHECK
+        enum FieldType
+        {
+            INT,
+            BIGINT,
+            VARCHAR,
+            DATETIME,
+        }
+
+        class Field
+        {
+            public string mFieldName;
+            public string mFieldType;
+            public int mSize;
+            public bool mNullable = true;
+            public bool mIsPrimaryKey;
+            public bool mIsKey;
+            public bool mAutoIncrement;
+            public string mDefault;
+        }
+
+        class Table
+        {
+            string mTableName;
+            List<Field> mFields;
+
+            public Table(Query query)
+            {
+                ParseQuery(query);
+            }
+
+            void ParseQuery(Query query)
+            {
+                int i;
+                int parenDepth = 0;
+
+                List<Token> tokens = query.mTokens;
+                Debug.Assert(tokens[2].mSymbol == Symbol.IDENTIFIER);
+                mTableName = tokens[2].mTokenText;
+
+                for (i = 0; i < tokens.Count; ++i)
+                    if (tokens[i].mTokenType == TokenType.LPAREN)
+                        break;
+
+                ++i;
+
+                const int STATE_BEGIN = 1;
+                const int STATE_IN_FIELD = 2;
+                const int STATE_IN_FIELD_MODIFIER = 3;
+
+                int fieldParseState = STATE_BEGIN;
+                Field field = null;
+
+                for (; i < tokens.Count; )
+                {
+                    switch (fieldParseState)
+                    {
+                        case STATE_BEGIN:
+                            field = new Field();
+                            field.mFieldName = tokens[i].mTokenText;
+                            fieldParseState = STATE_IN_FIELD;
+                        case STATE_IN_FIELD:
+                        case STATE_IN_FIELD_MODIFIER:
+                        default:
+                            Debugger.Break();
+                            break;
+                    }
+                }
+
+                // TODO:
+                // One problem I see with this block of code as it exists now is that by creating the field in each
+                // loop it doesn't gracefully handle the existence of KEY fields. I think this can be fixed by moving
+                // the state out of the loop and having this loop just iterate over all the remaining tokens in
+                // the stream.
+
+                /*
+                for (; i < tokens.Count; ++i)
+                {
+                    if (tokens[i].mTokenText.ToUpper() == "KEY")
+                    {
+                        // KEY ( field )
+                        if (tokens[i + 1].mTokenType == TokenType.LPAREN)
+                        {
+                            i += 
+                            continue;
+                        }
+                        // KEY key_name ( field )
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
+                    Field field = new Field();
+
+                    field.mFieldName = tokens[i++].mTokenText;
+                    field.mFieldType = ParseFieldType(tokens[i++].mTokenText);
+                    if (tokens[i].mTokenType == TokenType.LPAREN)
+                    {
+                        field.mSize = Int32.Parse(tokens[i + 2].mTokenText);
+                        i += 3;
+                    }
+
+                    for (; ; )
+                    {
+                        string upperCasedToken = tokens[i].mTokenText.ToUpper();
+
+                        if (upperCasedToken == "NOT" && tokens[i + 1].mTokenText.ToUpper() == "NULL")
+                        {
+                            field.mNullable = false;
+                            i += 2;
+                            continue;
+                        }
+
+                        if (upperCasedToken == "AUTO_INCREMENT")
+                        {
+                            field.mAutoIncrement = true;
+                            ++i;
+                            continue;
+                        }
+
+                        if (upperCasedToken == "PRIMARY" && tokens[i + 1].mTokenText.ToUpper() == "KEY")
+                        {
+                            field.mIsPrimaryKey = true;
+                            i += 2;
+                            continue;
+                        }
+
+                        if (upperCasedToken == "DEFAULT")
+                        {
+                            // DEFAULT ' foo '
+                            if (tokens[i + 1].mTokenType == TokenType.STRING_DELIMITER)
+                            {
+                                field.mDefault = tokens[i + 2].mTokenText;
+                                i += 4;
+                                continue;
+                            }
+                            else
+                            {
+                                field.mDefault = tokens[i + 1].mTokenText;
+                                i += 2;
+                                continue;
+                            }
+                        }
+
+                        if (tokens[i].mTokenType == TokenType.COMMA)
+                        {
+                            goto next_iteration;
+                        }
+                        else if (tokens[i].mTokenType == TokenType.RPAREN)
+                        {
+                            goto last_iteration;
+                        }
+                    }
+
+                next_iteration:
+                    mFields.Add(field);
+                }
+                
+            last_iteration:
+                ;
+                 * 
+            */
+            }
+
+            static FieldType ParseFieldType(string fieldTypeString)
+            {
+            }
+        }
 
         void CreateTable(Connection connection)
         {
+            Table table = new Table(mQuery);
             Debugger.Break();
         }
+#endif
 
         public override ConnectionState Execute(Connection connection)
         {
