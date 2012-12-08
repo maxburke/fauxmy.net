@@ -34,6 +34,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Antlr3.Runtime">
+      <HintPath>.\Antlr3.Runtime.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -46,6 +49,8 @@
     <Compile Include="CommandPacket.cs" />
     <Compile Include="Connection.cs" />
     <Compile Include="Log.cs" />
+    <Compile Include="MySQLLexer.cs" />
+    <Compile Include="MySQLParser.cs" />
     <Compile Include="NetworkBufferReader.cs" />
     <Compile Include="NetworkBufferWriter.cs" />
     <Compile Include="Program.cs" />
