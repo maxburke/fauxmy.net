@@ -16,13 +16,8 @@ tokens
 
 }
 
-@lexer::header 
-{
-}
-
-@lexer::members 
-{
-}
+@lexer::namespace { fxmy.net.Grammar }
+@parser::namespace { fxmy.net.Grammar }
 
 fragment A_ :	'a' | 'A';
 fragment B_ :	'b' | 'B';
@@ -1379,10 +1374,14 @@ partition_names:	partition_name (COMMA partition_name)* ;
 
 
 // SQL Statement Syntax ----  http://dev.mysql.com/doc/refman/5.6/en/sql-syntax.html ----------
-root_statement:
+public root_statement:
 	(SHIFT_LEFT SHIFT_RIGHT)?  
-	( data_manipulation_statements | data_definition_statements /*| transactional_locking_statements | replication_statements*/ )
+	( data_manipulation_statements | data_definition_statements | db_administration_statements /*| transactional_locking_statements | replication_statements*/ )
 	(SEMI)?
+;
+
+db_administration_statements:
+    set_statement
 ;
 
 data_manipulation_statements:
@@ -1461,7 +1460,27 @@ replication_statements:
 */
 
 
+// set ------ http://dev.mysql.com/doc/refman/5.6/en/set-statement.html -----------------------------
 
+/*
+SET variable_assignment [, variable_assignment] ...
+
+variable_assignment:
+      user_var_name = expr
+    | [GLOBAL | SESSION] system_var_name = expr
+    | [@@global. | @@session. | @@]system_var_name = expr
+*/
+
+/* TODO : finish this! */
+
+set_statement:
+    SET_SYM 
+    (
+      (CHARACTER_SYM SET_SYM charset_name (DEFAULT)?) 
+      | (NAMES_SYM TEXT_STRING (COLLATE_SYM '\'' collation_name '\'')? (DEFAULT)? ) 
+    ) //(DEFAULT)?
+//    | ( NAMES_SYM '\'' charset_name '\'' (COLLATE_SYM '\'' collation_name '\'')? (DEFAULT)? )
+;
 
 
 
