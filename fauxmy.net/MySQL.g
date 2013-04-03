@@ -209,6 +209,7 @@ DES_DECRYPT			: D_ E_ S_ '_' D_ E_ C_ R_ Y_ P_ T_  ;
 DES_ENCRYPT			: D_ E_ S_ '_' E_ N_ C_ R_ Y_ P_ T_  ;
 DES_KEY_FILE			: D_ E_ S_  '_' K_ E_ Y_  '_' F_ I_ L_ E_  ;
 DESC				: D_ E_ S_ C_  ;
+DESCRIBE            : D_ E_ S_ C_ R_ I_ B_ E_ ;
 DETERMINISTIC_SYM		: D_ E_ T_ E_ R_ M_ I_ N_ I_ S_ T_ I_ C_  ;
 DIRECTORY_SYM			: D_ I_ R_ E_ C_ T_ O_ R_ Y_  ;
 DISABLE_SYM			: D_ I_ S_ A_ B_ L_ E_  ;
@@ -1382,6 +1383,8 @@ public root_statement:
 
 db_administration_statements:
     set_statement
+    | describe_statement
+    | show_tables_statement
 ;
 
 data_manipulation_statements:
@@ -1477,13 +1480,37 @@ set_statement:
     SET_SYM 
     (
       (CHARACTER_SYM SET_SYM charset_name (DEFAULT)?) 
-      | (NAMES_SYM TEXT_STRING (COLLATE_SYM '\'' collation_name '\'')? (DEFAULT)? ) 
-    ) //(DEFAULT)?
-//    | ( NAMES_SYM '\'' charset_name '\'' (COLLATE_SYM '\'' collation_name '\'')? (DEFAULT)? )
+      | (NAMES_SYM TEXT_STRING (COLLATE_SYM TEXT_STRING)? (DEFAULT)? ) 
+    ) 
 ;
 
+// describe ------ http://dev.mysql.com/doc/refman/5.6/en/describe.html -----------------------------
 
+/*
+{DESCRIBE | DESC} tbl_name [col_name | wild]
+*/
 
+describe_statement:
+    (DESCRIBE | DESC)
+    table_name
+    (column_name)?
+;
+
+// show tables ------ http://dev.mysql.com/doc/refman/5.6/en/show-tables.html -----------------------
+
+/*
+SHOW [FULL] TABLES [{FROM | IN} db_name]
+    [LIKE 'pattern' | WHERE expr]
+*/
+
+show_tables_statement:
+    SHOW (FULL)? TABLES 
+    ( (FROM | IN_SYM) schema_name )?
+    (
+      (LIKE_SYM TEXT_STRING)
+      | (WHERE expression)
+    )
+;
 
 // select ------  http://dev.mysql.com/doc/refman/5.6/en/select.html  -------------------------------
 select_statement:
