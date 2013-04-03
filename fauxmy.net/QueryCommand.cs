@@ -4,333 +4,41 @@ using System.Linq;
 using System.Text;
 using System.Diagnostics;
 using System.Data.Odbc;
+using fxmy.net.Grammar;
+using Antlr.Runtime;
+using Antlr.Runtime.Tree;
 
 namespace fxmy.net
 {
-    public enum TokenType
-    {
-        INVALID,
-        SYMBOL,
-        STRING,
-        OPERATOR,
-        NUMBER,
-        SEMICOLON,
-        STRING_DELIMITER,
-        LPAREN,
-        RPAREN,
-        COMMA
-    }
-
-    public enum Symbol
-    {
-        INVALID,
-        IDENTIFIER,
-        CREATE,
-        DATABASE,
-        DESCRIBE,
-        FROM,
-        LIMIT,
-        NAMES,
-        SELECT,
-        SET,
-        SHOW,
-        TABLE,
-        TABLES,
-        TOP,
-        WHERE,
-        LIKE,
-        KEY,
-    }
-
-    public class Token
-    {
-        public string mTokenText;
-        public TokenType mTokenType;
-        public Symbol mSymbol;
-
-        static Symbol ClassifySymbol(string symbolString)
-        {
-            string lowerCaseString = symbolString.ToLower();
-
-            switch (lowerCaseString)
-            {
-                case "create": return Symbol.CREATE;
-                case "database": return Symbol.DATABASE;
-                case "describe": return Symbol.DESCRIBE;
-                case "from": return Symbol.FROM;
-                case "limit": return Symbol.LIMIT;
-                case "names": return Symbol.NAMES;
-                case "select": return Symbol.SELECT;
-                case "set": return Symbol.SET;
-                case "show": return Symbol.SHOW;
-                case "table": return Symbol.TABLE;
-                case "tables": return Symbol.TABLES;
-                case "top": return Symbol.TOP;
-                case "where": return Symbol.WHERE;
-                case "like": return Symbol.LIKE;
-            }
-
-            return Symbol.IDENTIFIER;
-        }
-
-        public Token(string tokenText, TokenType tokenType)
-        {
-            mTokenText = tokenText;
-            mTokenType = tokenType;
-
-            if (tokenType == TokenType.SYMBOL)
-            {
-                mSymbol = ClassifySymbol(mTokenText);
-            }
-        }
-
-        public override string ToString()
-        {
-            if (mTokenType == TokenType.SYMBOL)
-            {
-                return string.Format("{0}: {1} \"{2}\"", mTokenType, mSymbol, mTokenText);
-            }
-            else
-            {
-                return string.Format("{0}: \"{1}\"", mTokenType, mTokenText);
-            }
-        }
-    }
-
-    public class Query
-    {
-        public List<Token> mTokens = new List<Token>();
-
-        static bool IsOperatorChar(char c)
-        {
-            return c == '=';
-        }
-
-        static bool IsInitialIdentifierChar(char c)
-        {
-            return Char.IsLetter(c) || c == '_' || c == '@' || c == '#';
-        }
-
-        static bool IsSubsequentIdentifierChar(char c)
-        {
-            return Char.IsLetterOrDigit(c) || c == '@' || c == '#' || c == '$' || c == '_';
-        }
-
-        static bool IsNumericCharacter(char c)
-        {
-            return Char.IsDigit(c) || c == '.' || c == 'x' || c == 'X' || c == 'e' || c == 'E';
-        }
-
-        public int IndexOfSymbol(Symbol symbol)
-        {
-            for (int i = 0; i < mTokens.Count; ++i)
-            {
-                if (mTokens[i].mTokenType == TokenType.SYMBOL && mTokens[i].mSymbol == symbol)
-                    return i;
-            }
-
-            return -1;
-        }
-
-        public bool IsSymbolAt(int index, Symbol symbol)
-        {
-            if (mTokens.Count <= index)
-                return false;
-
-            if (mTokens[index].mTokenType != TokenType.SYMBOL)
-                return false;
-
-            return mTokens[index].mSymbol == symbol;
-        }
-
-        public bool HasSymbol(Symbol symbol)
-        {
-            return IndexOfSymbol(symbol) >= 0;
-        }
-
-        static Token ParseSymbol(string query, ref int i)
-        {
-            StringBuilder builder = new StringBuilder();
-
-            for (; i < query.Length; ++i)
-            {
-                char c = query[i];
-
-                if (!IsSubsequentIdentifierChar(c))
-                {
-                    // Move the pointer back one as the top level loop in the
-                    // function that calls this will advance it to the correct
-                    // position.
-                    --i;
-                    break;
-                }
-
-                builder.Append(c);
-            }
-
-            return new Token(builder.ToString(), TokenType.SYMBOL);
-        }
-
-        static Token ParseOperator(string query, ref int i)
-        {
-            StringBuilder builder = new StringBuilder();
-
-            for (; i < query.Length; ++i)
-            {
-                char c = query[i];
-
-                if (!IsOperatorChar(c))
-                {
-                    --i;
-                    break;
-                }
-
-                builder.Append(c);
-            }
-
-            return new Token(builder.ToString(), TokenType.OPERATOR);
-        }
-
-        static Token ParseNumber(string query, ref int i)
-        {
-            StringBuilder builder = new StringBuilder();
-
-            for (; i < query.Length; ++i)
-            {
-                char c = query[i];
-
-                if (!IsNumericCharacter(c))
-                {
-                    --i;
-                    break;
-                }
-
-                builder.Append(c);
-            }
-
-            return new Token(builder.ToString(), TokenType.NUMBER);
-        }
-
-        static Token ParseString(string query, ref int i)
-        {
-            char delimiter = query[i];
-            StringBuilder builder = new StringBuilder();
-
-            ++i;
-
-            for (; i < query.Length; ++i)
-            {
-                char c = query[i];
-                bool isEscaped = (i >= 1) && query[i - 1] == '\\';
-
-                if (c == delimiter && !isEscaped)
-                {
-                    // Technically we need to move the pointer i ahead one 
-                    // character but the top level loop in the function that
-                    // calls this one will do it for us.
-                    break;
-                }
-
-                builder.Append(c);
-            }
-
-            return new Token(builder.ToString(), TokenType.STRING);
-        }
-
-        public Query(string query)
-        {
-            TokenType tokenType = new TokenType();
-
-            for (int i = 0; i < query.Length; ++i)
-            {
-                char c = query[i];
-
-                if (IsInitialIdentifierChar(c))
-                {
-                    mTokens.Add(ParseSymbol(query, ref i));
-                }
-                else if (IsOperatorChar(c))
-                {
-                    mTokens.Add(ParseOperator(query, ref i));
-                }
-                else if (Char.IsWhiteSpace(c))
-                {
-                    continue;
-                }
-                else if (c == ';')
-                {
-                    mTokens.Add(new Token(";", TokenType.SEMICOLON));
-                }
-                else if (Char.IsNumber(c))
-                {
-                    mTokens.Add(ParseNumber(query, ref i));
-                }
-                else if (c == '\'' || c == '"')
-                {
-                    mTokens.Add(new Token(new String(c, 1), TokenType.STRING_DELIMITER));
-                    mTokens.Add(ParseString(query, ref i));
-                    mTokens.Add(new Token(new String(c, 1), TokenType.STRING_DELIMITER));
-                }
-                else if (c == ',')
-                {
-                    mTokens.Add(new Token(",", TokenType.COMMA));
-                }
-                else if (c == '(')
-                {
-                    mTokens.Add(new Token("(", TokenType.LPAREN));
-                }
-                else if (c == ')')
-                {
-                    mTokens.Add(new Token(")", TokenType.RPAREN));
-                }
-                else
-                {
-                    Debugger.Break();
-                }
-            }
-        }
-
-        public override string ToString()
-        {
-            StringBuilder stringBuilder = new StringBuilder();
-
-            for (int i = 0; i < mTokens.Count - 1; ++i)
-            {
-                stringBuilder.Append(mTokens[i].mTokenText);
-
-                // Add a space between all tokens unless we're adding the quotes around a string.
-                // In that case, check to see if the current token is a string delimiter and the
-                // next is a string, or the current is a string and the one after is a delimter,
-                // ie: *'foo* or *foo'*, and skip adding the delimiter.
-                if (!((mTokens[i].mTokenType == TokenType.STRING_DELIMITER && mTokens[i + 1].mTokenType == TokenType.STRING)
-                    || (mTokens[i].mTokenType == TokenType.STRING && mTokens[i + 1].mTokenType == TokenType.STRING_DELIMITER)))
-                {
-                    stringBuilder.Append(' ');
-                }
-            }
-
-            stringBuilder.Append(mTokens[mTokens.Count - 1].mTokenText);
-            return stringBuilder.ToString();
-        }
-    }
-    
     class QueryCommand : Command
     {
         string mQueryString;
-        Query mQuery;
+        CommonTree mQueryTree;
 
         public QueryCommand(NetworkBufferReader reader)
         {
-            mQueryString = reader.ReadString().Trim();
+            string queryString = reader.ReadString().Trim();
+            mQueryString = queryString;
+            Log.LogQuery(queryString);
 
-            Log.LogQuery(mQueryString);
+            ANTLRStringStream queryStringStream = new ANTLRStringStream(queryString);
+            MySQLLexer lexer = new MySQLLexer(queryStringStream);
+            CommonTokenStream tokenStream = new CommonTokenStream(lexer);
+            MySQLParser parser = new MySQLParser(tokenStream);
 
-            mQuery = new Query(mQueryString);
+            CommonTreeAdaptor treeAdaptor = new CommonTreeAdaptor();
+            parser.TreeAdaptor = treeAdaptor;
+
+            AstParserRuleReturnScope<object, IToken> parsed = parser.root_statement();
+
+            mQueryTree = parsed.Tree as CommonTree;
+            if (mQueryTree == null)
+                throw new fxmy.net.ConnectionException("Unable to parse query.");
         }
 
-        void Describe(Connection connection)
+        void Describe(Connection connection, List<CommonTree> parseTree)
         {
-            string describeCommand = string.Format("sp_columns {0}", mQuery.mTokens[1].mTokenText);
+            string describeCommand = string.Format("sp_columns {0}", parseTree[1].Text);
             OdbcCommand command = new OdbcCommand(describeCommand, connection.DatabaseConnection);
 
             try
@@ -343,8 +51,8 @@ namespace fxmy.net
                     return;
                 }
 
-                // Currently there is no implementation for Describe if the table
-                // actually exists. TODO: implement!
+                // Currently there is no implementation for Describe if the table 
+                // actually exists. TODO: Implement!
                 Debugger.Break();
             }
             catch (OdbcException e)
@@ -353,285 +61,86 @@ namespace fxmy.net
                 connection.Status = Status.GetStatus(e.Errors[0]);
             }
         }
-
-        void ShowTables(Connection connection)
-        {
-            string tablesCommand = "sp_tables @table_owner='dbo'";
-            int likeIndex = mQuery.IndexOfSymbol(Symbol.LIKE);
-
-            if (likeIndex >= 0)
-            {
-                Debug.Assert(mQuery.mTokens.Count >= likeIndex + 2);
-
-                Token delimiterToken = mQuery.mTokens[likeIndex + 1];
-                Token likeToken = mQuery.mTokens[likeIndex + 2];
-
-                Debug.Assert(delimiterToken.mTokenType == TokenType.STRING_DELIMITER);
-
-                tablesCommand += string.Format(", @table_name={0}{1}{0}",
-                    delimiterToken.mTokenText,
-                    likeToken.mTokenText);
-            }
-
-            OdbcCommand command = new OdbcCommand(tablesCommand, connection.DatabaseConnection);
-
-            try
-            {
-                OdbcDataReader reader = command.ExecuteReader();
-
-                if (!reader.HasRows)
-                {
-                    connection.Status = Status.GetStatus(Status.OK);
-                    return;
-                }
-
-                // Currently there is no implementation for SHOW TABLES if the table
-                // actually exists. TODO: implement!
-                Debugger.Break();
-            }
-            catch (OdbcException e)
-            {
-                Log.LogErrors(e);
-                connection.Status = Status.GetStatus(e.Errors[0]);
-            }
-        }
-#if WHATDAHECK
-        enum FieldType
-        {
-            INT,
-            BIGINT,
-            VARCHAR,
-            DATETIME,
-        }
-
-        class Field
-        {
-            public string mFieldName;
-            public string mFieldType;
-            public int mSize;
-            public bool mNullable = true;
-            public bool mIsPrimaryKey;
-            public bool mIsKey;
-            public bool mAutoIncrement;
-            public string mDefault;
-        }
-
-        class Table
-        {
-            string mTableName;
-            List<Field> mFields;
-
-            public Table(Query query)
-            {
-                ParseQuery(query);
-            }
-
-            void ParseQuery(Query query)
-            {
-                int i;
-                int parenDepth = 0;
-
-                List<Token> tokens = query.mTokens;
-                Debug.Assert(tokens[2].mSymbol == Symbol.IDENTIFIER);
-                mTableName = tokens[2].mTokenText;
-
-                for (i = 0; i < tokens.Count; ++i)
-                    if (tokens[i].mTokenType == TokenType.LPAREN)
-                        break;
-
-                ++i;
-
-                const int STATE_BEGIN = 1;
-                const int STATE_IN_FIELD = 2;
-                const int STATE_IN_FIELD_MODIFIER = 3;
-
-                int fieldParseState = STATE_BEGIN;
-                Field field = null;
-
-                for (; i < tokens.Count; )
-                {
-                    switch (fieldParseState)
-                    {
-                        case STATE_BEGIN:
-                            field = new Field();
-                            field.mFieldName = tokens[i].mTokenText;
-                            fieldParseState = STATE_IN_FIELD;
-                        case STATE_IN_FIELD:
-                        case STATE_IN_FIELD_MODIFIER:
-                        default:
-                            Debugger.Break();
-                            break;
-                    }
-                }
-
-                // TODO:
-                // One problem I see with this block of code as it exists now is that by creating the field in each
-                // loop it doesn't gracefully handle the existence of KEY fields. I think this can be fixed by moving
-                // the state out of the loop and having this loop just iterate over all the remaining tokens in
-                // the stream.
-
-                /*
-                for (; i < tokens.Count; ++i)
-                {
-                    if (tokens[i].mTokenText.ToUpper() == "KEY")
-                    {
-                        // KEY ( field )
-                        if (tokens[i + 1].mTokenType == TokenType.LPAREN)
-                        {
-                            i += 
-                            continue;
-                        }
-                        // KEY key_name ( field )
-                        else
-                        {
-                            continue;
-                        }
-                    }
-
-                    Field field = new Field();
-
-                    field.mFieldName = tokens[i++].mTokenText;
-                    field.mFieldType = ParseFieldType(tokens[i++].mTokenText);
-                    if (tokens[i].mTokenType == TokenType.LPAREN)
-                    {
-                        field.mSize = Int32.Parse(tokens[i + 2].mTokenText);
-                        i += 3;
-                    }
-
-                    for (; ; )
-                    {
-                        string upperCasedToken = tokens[i].mTokenText.ToUpper();
-
-                        if (upperCasedToken == "NOT" && tokens[i + 1].mTokenText.ToUpper() == "NULL")
-                        {
-                            field.mNullable = false;
-                            i += 2;
-                            continue;
-                        }
-
-                        if (upperCasedToken == "AUTO_INCREMENT")
-                        {
-                            field.mAutoIncrement = true;
-                            ++i;
-                            continue;
-                        }
-
-                        if (upperCasedToken == "PRIMARY" && tokens[i + 1].mTokenText.ToUpper() == "KEY")
-                        {
-                            field.mIsPrimaryKey = true;
-                            i += 2;
-                            continue;
-                        }
-
-                        if (upperCasedToken == "DEFAULT")
-                        {
-                            // DEFAULT ' foo '
-                            if (tokens[i + 1].mTokenType == TokenType.STRING_DELIMITER)
-                            {
-                                field.mDefault = tokens[i + 2].mTokenText;
-                                i += 4;
-                                continue;
-                            }
-                            else
-                            {
-                                field.mDefault = tokens[i + 1].mTokenText;
-                                i += 2;
-                                continue;
-                            }
-                        }
-
-                        if (tokens[i].mTokenType == TokenType.COMMA)
-                        {
-                            goto next_iteration;
-                        }
-                        else if (tokens[i].mTokenType == TokenType.RPAREN)
-                        {
-                            goto last_iteration;
-                        }
-                    }
-
-                next_iteration:
-                    mFields.Add(field);
-                }
-                
-            last_iteration:
-                ;
-                 * 
-            */
-            }
-
-            static FieldType ParseFieldType(string fieldTypeString)
-            {
-            }
-        }
-
-        void CreateTable(Connection connection)
-        {
-            Table table = new Table(mQuery);
-            Debugger.Break();
-        }
-#endif
 
         public override ConnectionState Execute(Connection connection)
         {
-            string queryString = mQueryString;
+            IList<ITree> rawChildren = mQueryTree.Children;
+            List<CommonTree> children = new List<CommonTree>(rawChildren.Count);
 
-            if (mQuery.IsSymbolAt(0, Symbol.SET) && mQuery.IsSymbolAt(1, Symbol.NAMES))
+            foreach (ITree treeInstance in rawChildren)
             {
-                Token namesToken = mQuery.mTokens[3];
-                Util.Verify(namesToken.mTokenType == TokenType.STRING && namesToken.mTokenText == "utf8");
-                connection.Status = Status.GetStatus(Status.OK);
+                children.Add((CommonTree)treeInstance);
             }
-            else if (mQuery.IsSymbolAt(0, Symbol.DESCRIBE))
+
+            Debug.Assert(children.Count > 0);
+            int child0 = children[0].Type;
+
+            if (child0 == MySQLLexer.SET_SYM)
             {
-                Describe(connection);
+                if (children[1].Type == MySQLLexer.NAMES_SYM)
+                {
+                    Util.Verify(children[2].Text == "'utf8'");
+                    connection.Status = Status.GetStatus(Status.OK);
+                }
             }
-            else if (mQuery.IsSymbolAt(0, Symbol.SHOW) && mQuery.IsSymbolAt(1, Symbol.TABLES))
+            else if (child0 == MySQLLexer.DESCRIBE || child0 == MySQLLexer.DESC)
             {
-                ShowTables(connection);
+                Describe(connection, children);
             }
-            else if (mQuery.IsSymbolAt(0, Symbol.CREATE) && mQuery.IsSymbolAt(1, Symbol.TABLE))
+            else if (child0 == MySQLLexer.SHOW 
+                && (children[1].Type == MySQLLexer.TABLES 
+                    || (children[1].Type == MySQLLexer.FULL && children[2].Type == MySQLLexer.TABLES)))
             {
-                CreateTable(connection);
+                Debugger.Break();
+            }
+            else if (child0 == MySQLLexer.CREATE && children[1].Type == MySQLLexer.TABLE)
+            {
+                Debugger.Break();
             }
             else
             {
-                // MySQL limits rows with a "LIMIT x" clause at the end of the query,
-                // but MSSQL expects a "SELECT TOP x" instead. This bit of code
-                // rearranges the query so that MSSQL doesn't barf.
-                if (mQuery.HasSymbol(Symbol.LIMIT))
-                {
-                    int limitIndex = mQuery.IndexOfSymbol(Symbol.LIMIT);
-                    Token numberToken = mQuery.mTokens[limitIndex + 1];
-                    Util.Verify(numberToken.mTokenType == TokenType.NUMBER);
+                string queryString = mQueryString;
+                bool isSelect = child0 == MySQLLexer.SELECT;
 
-                    // Remove the LIMIT token
-                    mQuery.mTokens.RemoveAt(limitIndex);
-                    // Remove the number token
-                    mQuery.mTokens.RemoveAt(limitIndex);
-                    
-                    // Add the "TOP x" after the SELECT token.
-                    int selectIndex = mQuery.IndexOfSymbol(Symbol.SELECT);
-                    mQuery.mTokens.Insert(selectIndex + 1, new Token("TOP", TokenType.SYMBOL));
-                    mQuery.mTokens.Insert(selectIndex + 2, numberToken);
-                    queryString = mQuery.ToString();
+                if (mQueryString.Contains("LIMIT"))
+                {
+                    StringBuilder topBuilder = new StringBuilder();
+                    StringBuilder queryBuilder = new StringBuilder();
+                    int i;
+
+                    topBuilder.Append("SELECT TOP ");
+
+                    // Skip the SELECT token, begin at 1.
+                    for (i = 1; i < children.Count; ++i)
+                    {
+                        if (children[i].Type == MySQLLexer.LIMIT)
+                        {
+                            ++i;
+                            topBuilder.Append(children[i].Text);
+                        }
+                        else
+                        {
+                            queryBuilder.Append(' ').Append(children[i].Text);
+                        }
+                    }
+
+                    queryString = topBuilder.Append(' ').Append(queryBuilder).ToString();
                 }
 
                 OdbcCommand command = new OdbcCommand(queryString, connection.DatabaseConnection);
 
-                if (mQuery.IsSymbolAt(0, Symbol.SELECT))
+                if (isSelect)
                 {
                     try
                     {
                         OdbcDataReader reader = command.ExecuteReader();
+                        Debugger.Break();
                     }
                     catch (OdbcException e)
                     {
                         Log.LogErrors(e);
                         connection.Status = Status.GetStatus(e.Errors[0]);
                     }
-
-                    //Debugger.Break();
                 }
                 else
                 {
